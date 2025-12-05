@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>MemeCore: Warp Gate</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+
+    <div class="stars"></div>
+    <div class="scanlines"></div>
+
+    <div class="app-wrapper">
+      <header>
+        <div class="brand">
+          <div class="brand-logo-text">MEMECORE</div>
+          <span class="brand-subtitle">Warp Gate & Staking Hub</span>
+        </div>
+        <div class="wallet-connect-group">
+          <button id="connect-phantom" class="btn btn-pixel btn-phantom">
+            <img src="https://cryptologos.cc/logos/solana-sol-logo.png" width="16" alt="Sol" style="margin-right:8px; filter: grayscale(100%) brightness(200%);">
+            <span id="phantom-status">Connect Phantom</span>
+          </button>
+          <button id="connect-metamask" class="btn btn-pixel btn-metamask">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" width="16" alt="MM" style="margin-right:8px;">
+            <span id="metamask-status">Connect MetaMask</span>
+          </button>
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <button class="tab-btn active" onclick="switchTab('bridge')">
+          <span class="icon">🌉</span> BRIDGE
+        </button>
+        <button class="tab-btn" onclick="switchTab('staking')">
+          <span class="icon">mM</span> STAKING
+        </button>
+      </nav>
+
+      <main id="panel-bridge" class="panel active">
+        <div class="card pixel-border">
+          <div class="card-header">
+            <h2 class="card-title">INBOUND TRANSFER</h2>
+            <span class="badge">SOLANA DEVNET</span>
+          </div>
+          
+          <div class="input-group">
+            <label class="label">SELECT ASSET</label>
+            <div class="pixel-select-wrapper">
+              <select id="token-select" class="pixel-input"></select>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label class="label">DESTINATION (EVM)</label>
+            <input id="evm-dest" class="pixel-input" placeholder="0x..." />
+            <button id="save-dest" class="btn btn-small btn-outline" style="margin-top:8px; width:100%;">Confirm Address</button>
+          </div>
+
+          <div class="input-group">
+            <div class="label-row">
+                <label class="label">AMOUNT</label>
+                </div>
+            <input id="bridge-amount" type="number" step="0.0001" placeholder="0.00" class="pixel-input amount-input" oninput="limitDecimals(this)" />
+          </div>
+
+          <button id="bridge-btn" class="btn btn-primary btn-pixel btn-block">
+            INITIATE WARP
+          </button>
+        </div>
+
+        <div class="card pixel-border" style="margin-top: 24px;">
+          <div class="card-header">
+            <h2 class="card-title">OUTBOUND TRANSFER</h2>
+            <span class="badge">UNWRAP</span>
+          </div>
+          <div class="input-group">
+            <label class="label">DESTINATION (SOLANA)</label>
+            <input id="unwrap-sol-dest" class="pixel-input" placeholder="Solana Wallet Address" />
+          </div>
+          <div class="input-group">
+            <div class="label-row">
+                <label class="label">AMOUNT TO BURN</label>
+                <div class="balance-display">
+                    Bal: <span id="unwrap-balance-display">0</span> M-Token
+                    <button id="unwrap-max-btn" class="btn-max">MAX</button>
+                </div>
+            </div>
+            <input id="unwrap-amount" type="number" step="0.0001" placeholder="0.00" class="pixel-input amount-input" oninput="limitDecimals(this)" />
+          </div>
+          <button id="unwrap-btn" class="btn btn-danger btn-pixel btn-block">
+            BURN & RELEASE
+          </button>
+        </div>
+      </main>
+
+      <main id="panel-staking" class="panel">
+        
+        <div class="stats-grid">
+            <div class="stat-card pixel-border">
+                <div class="stat-label">WALLET BALANCE</div>
+                <div class="stat-value" id="wrapped-balance">0.00</div>
+                <div class="stat-sub">M-Token</div>
+            </div>
+            <div class="stat-card pixel-border">
+                <div class="stat-label">STAKED AMOUNT</div>
+                <div class="stat-value text-accent" id="staked-amount">0.00</div>
+                <div class="stat-sub">Currently Staking</div>
+            </div>
+        </div>
+
+        <div class="card pixel-border" style="margin-top: 20px;">
+            <div class="card-header">
+                <h2 class="card-title">REWARDS</h2>
+            </div>
+            <div class="reward-row">
+                <div class="reward-amount">
+                    <span id="pending-reward">0.0000</span>
+                    <span class="currency">M</span>
+                </div>
+                <button id="claim-btn" class="btn btn-success btn-pixel">CLAIM</button>
+            </div>
+        </div>
+
+        <div class="card pixel-border" style="margin-top: 20px;">
+          <div class="card-header">
+            <h2 class="card-title">MANAGE STAKE</h2>
+            <div class="pixel-select-wrapper" style="width: 50%;">
+                <select id="staking-token-select" class="pixel-input small-select"></select>
+            </div>
+          </div>
+          
+          <div class="input-group">
+            <div class="label-row">
+                <label class="label">AMOUNT</label>
+                <div class="balance-display">
+                    Available: <span id="stake-available-display">0</span>
+                    <button id="stake-max-btn" class="btn-max">MAX</button>
+                </div>
+            </div>
+            <input id="stake-amount" type="number" step="0.0001" placeholder="0.00" class="pixel-input amount-input" oninput="limitDecimals(this)" />
+          </div>
+          
+          <div class="action-buttons">
+            <button id="stake-btn" class="btn btn-primary btn-pixel">APPROVE & STAKE</button>
+            <button id="unstake-btn" class="btn btn-outline btn-pixel">UNSTAKE ALL</button>
+          </div>
+          
+          <div style="margin-top: 20px; text-align: center;">
+             <button id="add-network" class="text-link">
+               Switch Network to MemeCore Testnet
+             </button>
+          </div>
+        </div>
+        
+        <div class="contract-info">
+          Contract: <span id="wrapped-token-address">Select Token</span>
+        </div>
+      </main>
+
+    </div>
+
+    <div id="loading-modal" class="modal-overlay">
+        <div class="modal-content pixel-border">
+            <div class="loader-animation">
+                <div class="pixel-spinner"></div>
+            </div>
+            <h3 id="modal-title">PROCESSING...</h3>
+            <p id="modal-desc">Please wait while the transaction is being confirmed on the blockchain.</p>
+            <div id="modal-step" class="modal-step">Waiting for wallet signature...</div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/@solana/web3.js@1.95.0/lib/index.iife.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.11.0/dist/ethers.umd.min.js"></script>
+    <script src="/config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

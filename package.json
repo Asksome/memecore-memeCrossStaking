@@ -1,0 +1,29 @@
+{
+  "name": "memecore-crosschain",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "hardhat test",
+    "create-memecoin": "node solana-memecoin/create-memecoin.js",
+    "deploy-memecore": "hardhat run scripts/deploy.js --network memecore_testnet",
+    "deploy-staking": "hardhat run scripts/deploy-staking.js --network memecore_testnet",
+    "start-relay": "node relay-server/index.js",
+    "set-distribute": "node scripts/manual-distribute.js 10",
+    "distribute": "node scripts/manual-distribute.js"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "dotenv": "^16.4.0",
+    "hardhat": "^2.22.0"
+  },
+  "dependencies": {
+    "@metaplex-foundation/mpl-token-metadata": "^2.13.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "@solana/spl-token": "^0.4.6",
+    "@solana/web3.js": "^1.95.0",
+    "axios": "^1.7.0",
+    "bs58": "^5.0.0",
+    "ethers": "^6.11.0",
+    "node-cron": "^3.0.3"
+  }
+}
