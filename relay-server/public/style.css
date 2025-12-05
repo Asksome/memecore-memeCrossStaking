@@ -2,11 +2,12 @@
 :root {
     --bg-dark: #120a2e;
     --bg-card: rgba(28, 20, 56, 0.85);
-    --primary: #6d28d9; /* Deep Purple */
+    --primary: #6d28d9;
     --primary-light: #8b5cf6;
-    --accent: #00f0ff; /* Cyan/Neon */
+    --accent: #00f0ff;
     --success: #10b981;
     --danger: #ef4444;
+    --warning: #f59e0b;
     --text-main: #ffffff;
     --text-muted: #a78bfa;
     --border-color: #4c1d95;
@@ -29,6 +30,7 @@ body {
     color: var(--text-main);
     min-height: 100vh;
     overflow-x: hidden;
+    padding-top: 40px; 
 }
 
 /* Background Effects */
@@ -41,15 +43,141 @@ body {
     z-index: 0;
 }
 
+/* Network Ticker Bar */
+.network-ticker-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 40px;
+    background: rgba(0, 0, 0, 0.9);
+    border-bottom: 2px solid var(--accent);
+    z-index: 2000; /* Increased Z-Index */
+    display: flex;
+    align-items: center;
+    /* overflow: hidden;  <-- REMOVED THIS to allow tooltip */
+    overflow: visible; 
+    font-family: 'Courier New', monospace;
+}
+
+/* Block Progress Bar */
+.block-progress-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    /* Changing color to indicate block time (faster feel) */
+    background: linear-gradient(90deg, rgba(16, 185, 129, 0.2), rgba(0, 240, 255, 0.4)); 
+    width: 0%; 
+    z-index: 0;
+    /* Transition handled in JS for reset */
+}
+
+.ticker-content {
+    display: flex;
+    gap: 20px;
+    padding: 0 20px;
+    width: 100%;
+    justify-content: center;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    animation: slideIn 0.5s ease-out;
+    z-index: 1; 
+    position: relative;
+}
+
+.ticker-item {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.ticker-label {
+    margin-right: 6px;
+    font-weight: bold;
+    color: var(--primary-light);
+}
+
+.ticker-value {
+    color: var(--success);
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.highlight-item .ticker-value {
+    color: var(--accent);
+    text-shadow: 0 0 5px var(--accent);
+}
+
+.ticker-unit {
+    color: var(--text-muted);
+    font-size: 10px;
+    margin-left: 2px;
+}
+
+/* TOOLTIP STYLES (Fixed Z-Index Issue) */
+.tooltip-container {
+    cursor: help;
+    position: relative; /* Anchor for tooltip */
+}
+
+.tooltip-wrapper {
+    position: absolute;
+    top: 100%; /* Just below the text */
+    left: 50%;
+    transform: translateX(-50%);
+    padding-top: 10px; /* Gap */
+    display: none; /* Hidden by default */
+    z-index: 3000; /* Very high z-index */
+}
+
+.tooltip-text {
+    display: block;
+    background-color: rgba(10, 10, 30, 0.98);
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 10px;
+    border: 1px solid var(--accent);
+    font-size: 10px;
+    font-family: var(--font-body);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+    line-height: 1.4;
+}
+
+/* Show on Hover */
+.tooltip-container:hover .tooltip-wrapper {
+    display: block;
+    animation: fadeInTooltip 0.2s ease-in-out;
+}
+
+@keyframes fadeInTooltip {
+    from { opacity: 0; transform: translateX(-50%) translateY(-5px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.updated {
+    animation: flash-green 0.5s ease;
+}
+
+/* ... Rest of CSS (app-wrapper, buttons, panels) remains same ... */
+/* ... (Keep existing CSS below here) ... */
+
+@keyframes flash-green {
+    0% { color: #fff; text-shadow: 0 0 10px #fff; }
+    50% { color: var(--success); text-shadow: 0 0 5px var(--success); }
+    100% { color: var(--success); }
+}
+
 .app-wrapper {
     position: relative;
-    max-width: 600px; /* More compact mobile-app feel */
+    max-width: 600px;
     margin: 0 auto;
     padding: 20px;
     z-index: 1;
 }
 
-/* Header */
 header {
     display: flex;
     flex-direction: column;
@@ -74,7 +202,6 @@ header {
     letter-spacing: 1px;
 }
 
-/* Buttons */
 .btn {
     border: none;
     cursor: pointer;
@@ -115,7 +242,6 @@ header {
 .btn-phantom { background: #512da8; color: #fff; font-size: 12px; padding: 8px 16px; }
 .btn-metamask { background: #e67e22; color: #fff; font-size: 12px; padding: 8px 16px; }
 
-/* Tabs */
 .tabs {
     display: flex;
     background: rgba(0,0,0,0.3);
@@ -142,7 +268,34 @@ header {
     box-shadow: 0 4px 10px rgba(109, 40, 217, 0.4);
 }
 
-/* Panels & Cards */
+.bridge-direction-toggle {
+    display: flex;
+    background: rgba(0,0,0,0.5);
+    border-radius: 6px;
+    padding: 4px;
+    margin-bottom: 12px;
+}
+
+.direction-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 10px;
+    font-family: var(--font-body);
+    font-weight: bold;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.direction-btn.active {
+    background: rgba(255,255,255,0.1);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+}
+
 .panel { display: none; animation: fadeIn 0.3s ease; }
 .panel.active { display: block; }
 
@@ -184,7 +337,6 @@ header {
     font-weight: bold;
 }
 
-/* Forms */
 .input-group { margin-bottom: 20px; }
 
 .label-row {
@@ -226,7 +378,7 @@ header {
     border: 2px solid var(--border-color);
     color: white;
     padding: 14px;
-    font-family: 'Inter', monospace; /* Monospaced for numbers */
+    font-family: 'Inter', monospace;
     font-size: 16px;
     border-radius: 4px;
     outline: none;
@@ -240,7 +392,6 @@ header {
 
 .btn-block { width: 100%; font-size: 16px; padding: 16px; font-family: var(--font-pixel); }
 
-/* Stats Grid */
 .stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -259,8 +410,9 @@ header {
 .stat-value { font-size: 20px; font-weight: 700; font-family: monospace; }
 .stat-sub { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; }
 .text-accent { color: var(--accent); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
 
-/* Reward Section */
 .reward-row {
     display: flex;
     justify-content: space-between;
@@ -292,13 +444,12 @@ header {
     font-size: 12px;
 }
 
-/* --- MODAL --- */
 .modal-overlay {
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.8);
     backdrop-filter: blur(5px);
-    display: none; /* Hidden by default */
+    display: none;
     align-items: center;
     justify-content: center;
     z-index: 9999;
@@ -317,25 +468,18 @@ header {
 }
 
 .loader-animation {
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     display: flex;
     justify-content: center;
+    align-items: center;
+    min-height: 100px;
 }
 
-/* Pixel Spinner */
-.pixel-spinner {
-    width: 40px;
-    height: 40px;
-    background-color: var(--accent);
-    animation: rotate-pixel 1.5s infinite steps(8);
-    box-shadow: 
-        4px 4px 0px 0px rgba(0,0,0,0.2),
-        -4px -4px 0px 0px rgba(255,255,255,0.2);
-}
-
-@keyframes rotate-pixel {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+.ant-spinner {
+    width: 120px;
+    height: auto;
+    display: block;
+    image-rendering: pixelated;
 }
 
 #modal-title {

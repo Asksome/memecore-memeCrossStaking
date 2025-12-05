@@ -142,21 +142,25 @@ const bridgeFactory = new ethers.Contract(
   validatorWallet
 );
 
-// --- 1. Oracle: 가격 업데이트 (매 1분) ---
-cron.schedule("* * * * *", async () => {
-  if (!stakingAbi.length) return;
+// --- 1. Oracle: 가격 업데이트 (수동/요청 기반) ---
+async function updatePriceOnce() {
+  if (!stakingAbi.length) {
+    throw new Error("Staking ABI not loaded");
+  }
   try {
     const price = Number(process.env.FAKE_PRICE || "1.5");
     const priceScale = ethers.parseUnits(price.toString(), 8); // 8 decimals
 
-    console.log(`[Oracle] Updating price: $${price}`);
+    console.log(`[Oracle] Updating price (on-demand): $${price}`);
     const tx = await stakingContract.updatePrice(priceScale);
     await tx.wait();
     console.log("[Oracle] Price update tx:", tx.hash);
+    return tx.hash;
   } catch (e) {
     console.error("[Oracle] Error:", e);
+    throw e;
   }
-});
+}
 
 // --- 2. UTC 00:00 보상 분배 ---
 cron.schedule(
@@ -505,6 +509,29 @@ const server = http.createServer((req, res) => {
         ) +
         ";"
     );
+    return;
+  }
+
+  if (url === "/api/update-price" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+    req.on("end", async () => {
+      try {
+        const txHash = await updatePriceOnce();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, txHash }));
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            ok: false,
+            message: err.message || String(err),
+          })
+        );
+      }
+    });
     return;
   }
 

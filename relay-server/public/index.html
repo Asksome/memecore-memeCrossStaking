@@ -16,6 +16,33 @@
     <div class="stars"></div>
     <div class="scanlines"></div>
 
+    <div class="network-ticker-bar pixel-border-bottom">
+        <div id="block-progress-bar" class="block-progress-fill"></div>
+        
+        <div class="ticker-content">
+            <div class="ticker-item">
+                <span class="ticker-label">🔴 LIVE BLOCK:</span>
+                <span id="net-block-height" class="ticker-value">LOADING...</span>
+            </div>
+            
+            <div class="ticker-item highlight-item tooltip-container">
+                <span class="ticker-label">💰 EST. REWARD POOL:</span>
+                <span id="net-reward-pool" class="ticker-value">0.0000</span>
+                <span class="ticker-unit">M</span>
+                <div class="tooltip-wrapper">
+                    <div class="tooltip-text">
+                        Accumulated 50% of daily rewards (Block Reward + Fees) since UTC 00:00.
+                        <br><span style="color:var(--accent); font-size:9px;">Updates per block</span>
+                    </div>
+                </div>
+            </div>
+            <div class="ticker-item">
+                <span class="ticker-label">⚡ TPS:</span>
+                <span id="net-tps" class="ticker-value">0</span>
+            </div>
+        </div>
+    </div>
+
     <div class="app-wrapper">
       <header>
         <div class="brand">
@@ -35,19 +62,29 @@
       </header>
 
       <nav class="tabs">
-        <button class="tab-btn active" onclick="switchTab('bridge')">
-          <span class="icon">🌉</span> BRIDGE
+        <button class="tab-btn active" onclick="switchMainTab('bridge')">
+          BRIDGE
         </button>
-        <button class="tab-btn" onclick="switchTab('staking')">
-          <span class="icon">mM</span> STAKING
+        <button class="tab-btn" onclick="switchMainTab('staking')">
+          STAKING
         </button>
       </nav>
 
       <main id="panel-bridge" class="panel active">
         <div class="card pixel-border">
-          <div class="card-header">
-            <h2 class="card-title">INBOUND TRANSFER</h2>
-            <span class="badge">SOLANA DEVNET</span>
+          
+          <div class="bridge-direction-toggle">
+            <button id="btn-dir-inbound" class="direction-btn active" onclick="setBridgeDirection('inbound')">
+              INBOUND (SOL -> EVM)
+            </button>
+            <button id="btn-dir-outbound" class="direction-btn" onclick="setBridgeDirection('outbound')">
+              OUTBOUND (EVM -> SOL)
+            </button>
+          </div>
+
+          <div class="card-header" style="margin-top: 16px;">
+            <h2 class="card-title" id="bridge-card-title">DEPOSIT TO MEMECORE</h2>
+            <span class="badge" id="bridge-badge">SOLANA DEVNET</span>
           </div>
           
           <div class="input-group">
@@ -57,45 +94,33 @@
             </div>
           </div>
 
-          <div class="input-group">
-            <label class="label">DESTINATION (EVM)</label>
-            <input id="evm-dest" class="pixel-input" placeholder="0x..." />
-            <button id="save-dest" class="btn btn-small btn-outline" style="margin-top:8px; width:100%;">Confirm Address</button>
+          <div id="form-inbound">
+            <div class="input-group">
+              <label class="label">DESTINATION (EVM ADDRESS)</label>
+              <input id="evm-dest" class="pixel-input" placeholder="0x..." />
+            </div>
+          </div>
+
+          <div id="form-outbound" style="display: none;">
+            <div class="input-group">
+              <label class="label">DESTINATION (SOLANA ADDRESS)</label>
+              <input id="unwrap-sol-dest" class="pixel-input" placeholder="Solana Wallet Address" />
+            </div>
           </div>
 
           <div class="input-group">
             <div class="label-row">
                 <label class="label">AMOUNT</label>
-                </div>
-            <input id="bridge-amount" type="number" step="0.0001" placeholder="0.00" class="pixel-input amount-input" oninput="limitDecimals(this)" />
-          </div>
-
-          <button id="bridge-btn" class="btn btn-primary btn-pixel btn-block">
-            INITIATE WARP
-          </button>
-        </div>
-
-        <div class="card pixel-border" style="margin-top: 24px;">
-          <div class="card-header">
-            <h2 class="card-title">OUTBOUND TRANSFER</h2>
-            <span class="badge">UNWRAP</span>
-          </div>
-          <div class="input-group">
-            <label class="label">DESTINATION (SOLANA)</label>
-            <input id="unwrap-sol-dest" class="pixel-input" placeholder="Solana Wallet Address" />
-          </div>
-          <div class="input-group">
-            <div class="label-row">
-                <label class="label">AMOUNT TO BURN</label>
-                <div class="balance-display">
-                    Bal: <span id="unwrap-balance-display">0</span> M-Token
+                <div class="balance-display" id="outbound-balance-row" style="display:none;">
+                    Bal: <span id="unwrap-balance-display">0</span>
                     <button id="unwrap-max-btn" class="btn-max">MAX</button>
                 </div>
             </div>
-            <input id="unwrap-amount" type="number" step="0.0001" placeholder="0.00" class="pixel-input amount-input" oninput="limitDecimals(this)" />
+            <input id="bridge-amount" type="number" step="0.0001" placeholder="0.0000" class="pixel-input amount-input" oninput="limitDecimals(this)" />
           </div>
-          <button id="unwrap-btn" class="btn btn-danger btn-pixel btn-block">
-            BURN & RELEASE
+
+          <button id="action-bridge-btn" class="btn btn-primary btn-pixel btn-block">
+            INITIATE WARP
           </button>
         </div>
       </main>
@@ -105,13 +130,23 @@
         <div class="stats-grid">
             <div class="stat-card pixel-border">
                 <div class="stat-label">WALLET BALANCE</div>
-                <div class="stat-value" id="wrapped-balance">0.00</div>
+                <div class="stat-value" id="wrapped-balance">0</div>
                 <div class="stat-sub">M-Token</div>
             </div>
             <div class="stat-card pixel-border">
                 <div class="stat-label">STAKED AMOUNT</div>
-                <div class="stat-value text-accent" id="staked-amount">0.00</div>
+                <div class="stat-value text-accent" id="staked-amount">0</div>
                 <div class="stat-sub">Currently Staking</div>
+            </div>
+            <div class="stat-card pixel-border">
+                <div class="stat-label">TOTAL VALUE LOCKED</div>
+                <div class="stat-value text-success" id="tvl-amount">$0</div>
+                <div class="stat-sub">Global TVL (USD)</div>
+            </div>
+            <div class="stat-card pixel-border">
+                <div class="stat-label">MY POOL SHARE</div>
+                <div class="stat-value text-warning" id="share-percent">0%</div>
+                <div class="stat-sub">Est. Daily: <span id="est-user-reward">0</span> M</div>
             </div>
         </div>
 
@@ -121,7 +156,7 @@
             </div>
             <div class="reward-row">
                 <div class="reward-amount">
-                    <span id="pending-reward">0.0000</span>
+                    <span id="pending-reward">0</span>
                     <span class="currency">M</span>
                 </div>
                 <button id="claim-btn" class="btn btn-success btn-pixel">CLAIM</button>
@@ -144,7 +179,7 @@
                     <button id="stake-max-btn" class="btn-max">MAX</button>
                 </div>
             </div>
-            <input id="stake-amount" type="number" step="0.0001" placeholder="0.00" class="pixel-input amount-input" oninput="limitDecimals(this)" />
+            <input id="stake-amount" type="number" step="0.0001" placeholder="0.0000" class="pixel-input amount-input" oninput="limitDecimals(this)" />
           </div>
           
           <div class="action-buttons">
@@ -166,14 +201,21 @@
 
     </div>
 
-    <div id="loading-modal" class="modal-overlay">
+    <div id="universal-modal" class="modal-overlay">
         <div class="modal-content pixel-border">
-            <div class="loader-animation">
-                <div class="pixel-spinner"></div>
+            
+            <div id="modal-spinner" class="loader-animation">
+                <img src="https://c.tenor.com/-kma6Wd6wKkAAAAd/tenor.gif" class="ant-spinner" alt="Loading...">
             </div>
+
             <h3 id="modal-title">PROCESSING...</h3>
             <p id="modal-desc">Please wait while the transaction is being confirmed on the blockchain.</p>
+            
             <div id="modal-step" class="modal-step">Waiting for wallet signature...</div>
+
+            <button id="modal-close-btn" class="btn btn-primary btn-pixel" style="margin-top: 20px; display: none; width: 100%;">
+                OK
+            </button>
         </div>
     </div>
 

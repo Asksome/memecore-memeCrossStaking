@@ -1,50 +1,129 @@
 /**
- * MemeCore Frontend Logic - Final Design
+ * MemeCore Frontend Logic - Final Ant Version
+ * Features:
+ * 1. Live Network Dashboard (Block Height, Real-time Reward Pool)
+ * 2. Merged Bridge UI
+ * 3. Strict Number Formatting
+ * 4. Phantom Anti-Hijacking
  */
 
 // --- UI Controllers ---
 
-const loadingModal = {
-    el: document.getElementById('loading-modal'),
+const ui = {
+    modal: document.getElementById('universal-modal'),
     title: document.getElementById('modal-title'),
+    desc: document.getElementById('modal-desc'),
     step: document.getElementById('modal-step'),
+    spinner: document.getElementById('modal-spinner'),
+    closeBtn: document.getElementById('modal-close-btn'),
     
-    show: function(title, stepText) {
+    // Show Loading/Processing State (No Close Button)
+    showLoading: function(title, stepText) {
         this.title.textContent = title;
         this.step.textContent = stepText || "Please confirm in your wallet...";
-        this.el.classList.add('active');
+        this.step.style.display = 'block';
+        this.desc.style.display = 'block';
+        this.spinner.style.display = 'flex'; // GIF Container
+        this.closeBtn.style.display = 'none';
+        this.modal.classList.add('active');
     },
     
-    update: function(text) {
+    updateStep: function(text) {
         this.step.textContent = text;
     },
     
+    // Show Alert/Result State (Has Close Button)
+    showAlert: function(title, message, isError = false) {
+        this.title.textContent = title;
+        this.title.style.color = isError ? 'var(--danger)' : 'var(--accent)';
+        this.desc.textContent = message;
+        this.desc.style.display = 'block';
+        this.step.style.display = 'none'; // Hide step details for simple alerts
+        this.spinner.style.display = 'none'; // Hide GIF for alerts
+        this.closeBtn.style.display = 'block';
+        this.modal.classList.add('active');
+    },
+    
     hide: function() {
-        this.el.classList.remove('active');
+        this.modal.classList.remove('active');
+        // Reset styles
+        this.title.style.color = 'var(--accent)';
+        this.desc.textContent = "Please wait while the transaction is being confirmed on the blockchain.";
     }
 };
 
-function switchTab(tabId) {
+// Close button handler for Modal
+document.getElementById('modal-close-btn').addEventListener('click', () => {
+    ui.hide();
+});
+
+// Main Tab Switcher (Bridge vs Staking)
+function switchMainTab(tabId) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     
-    // Select based on onClick handler
-    const btn = document.querySelector(`button[onclick="switchTab('${tabId}')"]`);
+    const btn = document.querySelector(`button[onclick="switchMainTab('${tabId}')"]`);
     if(btn) btn.classList.add('active');
     document.getElementById(`panel-${tabId}`).classList.add('active');
 }
 
+// Number Formatting (Max 4 decimals, Commas for thousands)
 function formatDisplayValue(valueStr) {
     if (!valueStr) return "0";
     const num = parseFloat(valueStr);
     if (isNaN(num)) return "0";
-    return num.toLocaleString('en-US', { maximumFractionDigits: 4, minimumFractionDigits: 0 });
+    
+    return new Intl.NumberFormat('en-US', { 
+        minimumFractionDigits: 0, 
+        maximumFractionDigits: 4 
+    }).format(num);
 }
 
+// Input Validator (Limits typing to 4 decimal places)
 function limitDecimals(input) {
-    if (input.value.indexOf('.') !== -1) {
-        const parts = input.value.split('.');
-        if (parts[1].length > 4) input.value = parts[0] + '.' + parts[1].slice(0, 4);
+    let val = input.value;
+    if (val.indexOf('.') !== -1) {
+        const parts = val.split('.');
+        if (parts[1].length > 4) {
+            input.value = parts[0] + '.' + parts[1].slice(0, 4);
+        }
+    }
+}
+
+// --- Bridge UI Logic (Merged Inbound/Outbound) ---
+let currentBridgeMode = 'inbound'; // 'inbound' or 'outbound'
+
+function setBridgeDirection(mode) {
+    currentBridgeMode = mode;
+    
+    // Toggle Buttons
+    document.getElementById('btn-dir-inbound').classList.toggle('active', mode === 'inbound');
+    document.getElementById('btn-dir-outbound').classList.toggle('active', mode === 'outbound');
+    
+    // Toggle Forms
+    document.getElementById('form-inbound').style.display = mode === 'inbound' ? 'block' : 'none';
+    document.getElementById('form-outbound').style.display = mode === 'outbound' ? 'block' : 'none';
+    
+    // Update Header & Badge & Button Text
+    const title = document.getElementById('bridge-card-title');
+    const badge = document.getElementById('bridge-badge');
+    const btn = document.getElementById('action-bridge-btn');
+    const balanceRow = document.getElementById('outbound-balance-row');
+
+    if (mode === 'inbound') {
+        title.textContent = "DEPOSIT TO MEMECORE";
+        badge.textContent = "SOLANA DEVNET";
+        btn.textContent = "INITIATE WARP (SOL -> EVM)";
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-primary');
+        balanceRow.style.display = 'none';
+    } else {
+        title.textContent = "WITHDRAW TO SOLANA";
+        badge.textContent = "UNWRAP / BURN";
+        btn.textContent = "BURN & RELEASE (EVM -> SOL)";
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-danger');
+        balanceRow.style.display = 'block';
     }
 }
 
@@ -54,12 +133,23 @@ let phantomPubkey = null;
 let evmProvider = null, evmSigner = null, evmAddress = null;
 let wrappedToken = null, stakingContract = null;
 let tokenDecimals = 18;
+// Globals for reward calculation
+let currentRewardPool = 0; 
+let currentStakedAmount = 0; // Total Staked
+
+// --- Network Dashboard State ---
+let lastBlockTimestamp = Date.now();
+// Default to 3 seconds if no data yet
+let currentBlockTimeMs = 3000; 
 
 // --- Initialization ---
 (function init() {
     console.log('Initializing MemeCore Interface...');
     
-    // Setup Solana Mint Dropdown
+    // Start Live Network Monitor (Dashboard)
+    startNetworkMonitor();
+
+    // Setup Dropdowns
     const tokenSelect = document.getElementById("token-select");
     const stakingSelect = document.getElementById("staking-token-select");
 
@@ -81,11 +171,104 @@ let tokenDecimals = 18;
         stakingSelect.appendChild(opt);
         stakingSelect.addEventListener('change', loadStakingData);
     }
-
-    if (cfg.DEFAULT_MEMECORE_ADDRESS) {
-        document.getElementById("evm-dest").value = cfg.DEFAULT_MEMECORE_ADDRESS;
-    }
 })();
+
+// --- NEW: Live Network Monitor ---
+async function startNetworkMonitor() {
+    const wsUrl = 'wss://ws.memecore.net'; // Or use cfg.WS_URL if available
+    
+    // 1. REWARD POOL LOGIC (UTC 00:00 - 24:00 Accumulation)
+    const DAILY_TARGET = 5000000.0; 
+
+    setInterval(() => {
+        const now = new Date();
+        // Calculate seconds passed in UTC day
+        const secondsInDay = (now.getUTCHours() * 3600) + (now.getUTCMinutes() * 60) + now.getUTCSeconds();
+        const totalSeconds = 86400;
+        
+        // Progress Ratio of the day (0.0 to 1.0)
+        const dayProgress = secondsInDay / totalSeconds;
+        
+        // Pool Value Logic: 50% of target accumulated over the day
+        const accumulated = DAILY_TARGET * dayProgress;
+        const poolValue = accumulated * 0.5;
+        currentRewardPool = poolValue; // Store globally
+
+        const rewardEl = document.getElementById("net-reward-pool");
+        if(rewardEl) {
+            rewardEl.innerText = formatDisplayValue(poolValue.toString());
+        }
+    }, 1000); 
+
+    // 2. BLOCK MONITOR & PROGRESS BAR LOGIC
+    try {
+        const monitorProvider = new ethers.WebSocketProvider(wsUrl);
+        console.log("Connecting to MemeCore Network Stream...");
+
+        monitorProvider.on("block", async (blockNumber) => {
+            try {
+                const now = Date.now();
+                // Measure actual time since last block
+                const timeDiff = now - lastBlockTimestamp; 
+                lastBlockTimestamp = now;
+
+                // Update moving average or just use last diff if valid (> 100ms)
+                if (timeDiff > 100 && timeDiff < 60000) {
+                    currentBlockTimeMs = timeDiff;
+                }
+
+                // --- Trigger Progress Bar Animation ---
+                resetAndAnimateProgressBar(currentBlockTimeMs);
+
+                // Update Text
+                updateTicker("net-block-height", `#${blockNumber}`);
+
+                // TPS Calculation
+                const block = await monitorProvider.getBlock(blockNumber);
+                if (block) {
+                    const txCount = block.transactions.length;
+                    const tps = timeDiff > 0 ? (txCount / (timeDiff/1000)).toFixed(1) : "0.0";
+                    updateTicker("net-tps", tps);
+                }
+            } catch (err) {
+                console.error("Monitor Error:", err);
+            }
+        });
+
+    } catch (e) {
+        console.warn("WebSocket Monitor Failed:", e);
+        document.getElementById("net-block-height").innerText = "OFFLINE";
+    }
+}
+
+// Function to animate bar per block
+function resetAndAnimateProgressBar(durationMs) {
+    const bar = document.getElementById("block-progress-bar");
+    if (!bar) return;
+
+    // 1. Reset to 0 instantly (remove transition)
+    bar.style.transition = 'none';
+    bar.style.width = '0%';
+
+    // 2. Force reflow to apply the reset
+    void bar.offsetWidth;
+
+    // 3. Animate to 100% over the duration of expected block time
+    // Using linear ease for gauge feel
+    bar.style.transition = `width ${durationMs}ms linear`;
+    bar.style.width = '100%';
+}
+
+function updateTicker(id, value) {
+    const el = document.getElementById(id);
+    if(el) {
+        el.innerText = value;
+        el.classList.remove("updated");
+        void el.offsetWidth;
+        el.classList.add("updated");
+    }
+}
+
 
 // --- Wallet Connections ---
 
@@ -94,7 +277,7 @@ document.getElementById('connect-phantom').addEventListener('click', async () =>
     try {
         const provider = window.solana;
         if (!provider || !provider.isPhantom) {
-            alert("Phantom Wallet is not installed!");
+            ui.showAlert("Wallet Error", "Phantom Wallet is not installed!", true);
             return;
         }
         const resp = await provider.connect();
@@ -105,24 +288,34 @@ document.getElementById('connect-phantom').addEventListener('click', async () =>
         btn.classList.add('connected');
     } catch (e) {
         console.error(e);
+        ui.showAlert("Connection Failed", e.message, true);
     }
 });
 
-// 2. MetaMask
-function getMetaMaskProvider() {
-    const eth = window.ethereum;
-    if (!eth) return null;
-    if (Array.isArray(eth.providers)) return eth.providers.find((p) => p.isMetaMask && !p.isPhantom);
-    if (eth.isPhantom) return null;
-    return eth;
+// Helper: Get Real MetaMask (Bypass Phantom Hijacking)
+function getTrueMetaMaskProvider() {
+    if (!window.ethereum) return null;
+
+    if (window.ethereum.providers) {
+        return window.ethereum.providers.find(p => p.isMetaMask && !p.isPhantom);
+    }
+    
+    if (window.ethereum.isMetaMask && !window.ethereum.isPhantom) {
+        return window.ethereum;
+    }
+    
+    return null;
 }
 
+// 2. MetaMask
 document.getElementById('connect-metamask').addEventListener('click', async () => {
-    const eth = getMetaMaskProvider();
+    const eth = getTrueMetaMaskProvider();
+    
     if (!eth) {
-        alert("MetaMask is not installed!");
+        ui.showAlert("Wallet Error", "MetaMask is not installed (or Phantom is blocking it).", true);
         return;
     }
+    
     try {
         const accounts = await eth.request({ method: "eth_requestAccounts" });
         evmProvider = new ethers.BrowserProvider(eth);
@@ -135,33 +328,39 @@ document.getElementById('connect-metamask').addEventListener('click', async () =
         loadStakingData(); 
     } catch (e) {
         console.error(e);
+        ui.showAlert("Connection Failed", e.message, true);
     }
 });
 
-// --- Bridge Logic ---
+// --- Main Bridge Action Handler ---
+document.getElementById('action-bridge-btn').addEventListener('click', () => {
+    if (currentBridgeMode === 'inbound') {
+        handleInboundBridge();
+    } else {
+        handleOutboundBridge();
+    }
+});
 
-async function saveDestination() {
-    const addr = document.getElementById("evm-dest").value.trim();
-    if (!addr) return;
+// 1. Inbound Logic (SOL -> EVM)
+async function handleInboundBridge() {
+    if (!phantomPubkey) { ui.showAlert("Wallet Required", "Please connect Phantom Wallet first.", true); return; }
+    
+    const amountStr = document.getElementById("bridge-amount").value.trim();
+    const evmDest = document.getElementById("evm-dest").value.trim();
+    
+    const parsed = Number(amountStr);
+    if (!parsed || parsed <= 0) { ui.showAlert("Invalid Input", "Please enter a valid amount.", true); return; }
+    if (!evmDest || !evmDest.startsWith("0x")) { ui.showAlert("Invalid Input", "Please enter a valid EVM address.", true); return; }
+
     try {
         await fetch("/api/set-dest-address", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ address: addr }),
+            body: JSON.stringify({ address: evmDest }),
         });
-    } catch (e) { console.error(e); }
-}
-
-document.getElementById('bridge-btn').addEventListener('click', async () => {
-    if (!phantomPubkey) { alert("Connect Phantom Wallet first!"); return; }
+    } catch (e) {}
     
-    const amountStr = document.getElementById("bridge-amount").value.trim();
-    const parsed = Number(amountStr);
-    if (!parsed || parsed <= 0) { alert("Invalid amount."); return; }
-
-    await saveDestination();
-    
-    loadingModal.show("INITIATING WARP", "Preparing Solana transaction...");
+    ui.showLoading("INITIATING WARP", "Preparing Solana transaction...");
 
     try {
         const selectedMint = document.getElementById("token-select").value;
@@ -173,7 +372,7 @@ document.getElementById('bridge-btn').addEventListener('click', async () => {
         const mintPubkey = new solanaWeb3.PublicKey(selectedMint);
         const vaultPubkey = new solanaWeb3.PublicKey(cfg.SOLANA_VAULT_ADDRESS);
         
-        // Check balance (Simple check)
+        // Check balance
         const srcRes = await connection.getParsedTokenAccountsByOwner(phantomPubkey, { mint: mintPubkey });
         if (!srcRes.value.length) throw new Error("No token account found.");
         const sourceTokenAccount = srcRes.value[0].pubkey;
@@ -204,19 +403,57 @@ document.getElementById('bridge-btn').addEventListener('click', async () => {
         const { blockhash } = await connection.getLatestBlockhash();
         tx.recentBlockhash = blockhash;
 
-        loadingModal.update("Please sign in Phantom...");
+        ui.updateStep("Please sign in Phantom...");
         const signed = await window.solana.signAndSendTransaction(tx);
         
-        loadingModal.update("Transaction sent! Waiting for confirmation...");
-        
-        // Start polling for relay
+        ui.updateStep("Transaction sent! Waiting for confirmation...");
         monitorBridgeStatus(signed.signature);
 
     } catch (e) {
-        loadingModal.hide();
-        alert(`Bridge Failed: ${e.message}`);
+        ui.hide();
+        ui.showAlert("Bridge Failed", e.message, true);
     }
-});
+}
+
+// 2. Outbound Logic (EVM -> SOL)
+async function handleOutboundBridge() {
+    try {
+        if (!evmSigner || !evmAddress) { ui.showAlert("Wallet Required", "Connect MetaMask first.", true); return; }
+        
+        const solDest = document.getElementById("unwrap-sol-dest").value.trim();
+        const amountStr = document.getElementById("bridge-amount").value.trim();
+        
+        if (!solDest || !amountStr) { ui.showAlert("Invalid Input", "Please fill all fields.", true); return; }
+
+        ui.showLoading("UNWRAPPING", "Preparing burn...");
+
+        const timestamp = Math.floor(Date.now() / 1000);
+        const msg = `UNWRAP:${amountStr}:${solDest}:${timestamp}`;
+        
+        ui.updateStep("Sign the request in MetaMask...");
+        const signature = await evmSigner.signMessage(msg);
+
+        ui.updateStep("Processing on server...");
+        const res = await fetch("/api/unwrap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: amountStr, solanaAddress: solDest, evmAddress, timestamp, signature }),
+        });
+        
+        const data = await res.json();
+        
+        if (data.status === "ok") {
+            ui.showAlert("Unwrap Complete!", `Burn Tx: ${data.evmTxHash.slice(0,10)}...`);
+            document.getElementById("bridge-amount").value = "";
+            loadStakingData();
+        } else {
+            ui.showAlert("Unwrap Failed", data.message, true);
+        }
+    } catch (e) { 
+        ui.hide();
+        ui.showAlert("Error", e.message, true);
+    }
+}
 
 async function monitorBridgeStatus(signature) {
     let attempts = 0;
@@ -224,8 +461,7 @@ async function monitorBridgeStatus(signature) {
         attempts++;
         if(attempts > 30) { 
             clearInterval(interval); 
-            loadingModal.hide();
-            alert("Timeout: Check explorer for status.");
+            ui.showAlert("Timeout", "Check explorer for status.", true);
             return; 
         }
         try {
@@ -238,8 +474,7 @@ async function monitorBridgeStatus(signature) {
                 const data = await res.json();
                 if (data.status === "minted" || data.status === "already_processed") {
                     clearInterval(interval);
-                    loadingModal.hide();
-                    alert("Bridge Complete! Assets minted on MemeCore.");
+                    ui.showAlert("Success!", "Bridge Complete! Assets minted on MemeCore.");
                     document.getElementById("bridge-amount").value = "";
                 }
             }
@@ -250,10 +485,17 @@ async function monitorBridgeStatus(signature) {
 // --- Staking Logic ---
 
 const ERC20_ABI = ["function balanceOf(address) view returns (uint256)", "function allowance(address,address) view returns (uint256)", "function approve(address,uint256) returns (bool)", "function decimals() view returns (uint8)"];
-const STAKE_ABI = ["function stake(uint256) external", "function requestUnstake() external", "function claimRewards() external", "function getStakerData(address) view returns (uint256,uint256,uint256,uint256)", "function mxToken() view returns (address)"];
+const STAKE_ABI = [
+    "function stake(uint256) external", 
+    "function requestUnstake() external", 
+    "function claimRewards() external", 
+    "function getStakerData(address) view returns (uint256,uint256,uint256,uint256)", 
+    "function mxToken() view returns (address)",
+    "function totalStakedAmount() view returns (uint256)",
+    "function currentTokenPriceUSD() view returns (uint256)"
+];
 const FACTORY_ABI = ["function solMintToWrapped(bytes32) view returns (address)"];
 
-// Store raw balance for MAX button
 let rawWrappedBalance = 0n;
 
 async function loadStakingData() {
@@ -276,7 +518,7 @@ async function loadStakingData() {
         stakingContract = new ethers.Contract(cfg.STAKING_CONTRACT_ADDR, STAKE_ABI, evmSigner);
         tokenDecimals = await wrappedToken.decimals();
 
-        // Balance
+        // 1. Balance
         rawWrappedBalance = await wrappedToken.balanceOf(evmAddress);
         const balHuman = formatDisplayValue(ethers.formatUnits(rawWrappedBalance, tokenDecimals));
         
@@ -284,10 +526,36 @@ async function loadStakingData() {
         document.getElementById("unwrap-balance-display").textContent = balHuman;
         document.getElementById("stake-available-display").textContent = balHuman;
 
-        // Staking Info
+        // 2. User Staking Info
         const data = await stakingContract.getStakerData(evmAddress);
-        document.getElementById("staked-amount").textContent = formatDisplayValue(ethers.formatUnits(data[0], tokenDecimals));
+        const stakedAmount = data[0]; // uint256
+        
+        document.getElementById("staked-amount").textContent = formatDisplayValue(ethers.formatUnits(stakedAmount, tokenDecimals));
         document.getElementById("pending-reward").textContent = formatDisplayValue(ethers.formatEther(data[2]));
+
+        // 3. Global Stats for TVL and Share
+        const totalStaked = await stakingContract.totalStakedAmount();
+        const price8 = await stakingContract.currentTokenPriceUSD(); // 8 decimals
+        
+        currentStakedAmount = parseFloat(ethers.formatUnits(totalStaked, tokenDecimals));
+        const price = parseFloat(ethers.formatUnits(price8, 8));
+
+        // Calculate TVL
+        const tvl = currentStakedAmount * price;
+        document.getElementById("tvl-amount").textContent = "$" + new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(tvl);
+
+        // Calculate Share %
+        let share = 0;
+        if (currentStakedAmount > 0) {
+            const userStaked = parseFloat(ethers.formatUnits(stakedAmount, tokenDecimals));
+            share = (userStaked / currentStakedAmount) * 100;
+        }
+        document.getElementById("share-percent").textContent = share.toFixed(3) + "%";
+
+        // Calculate Estimated User Reward
+        // This estimates the user's portion of the *upcoming* daily pool
+        const estUserReward = currentRewardPool * (share / 100);
+        document.getElementById("est-user-reward").textContent = formatDisplayValue(estUserReward.toFixed(2));
 
     } catch(e) { console.error(e); }
 }
@@ -295,116 +563,77 @@ async function loadStakingData() {
 // MAX Buttons
 document.getElementById('stake-max-btn').addEventListener('click', () => {
     if(rawWrappedBalance > 0n) {
-        document.getElementById('stake-amount').value = ethers.formatUnits(rawWrappedBalance, tokenDecimals);
+        const el = document.getElementById('stake-amount');
+        el.value = ethers.formatUnits(rawWrappedBalance, tokenDecimals);
+        limitDecimals(el);
     }
 });
 
 document.getElementById('unwrap-max-btn').addEventListener('click', () => {
     if(rawWrappedBalance > 0n) {
-        document.getElementById('unwrap-amount').value = ethers.formatUnits(rawWrappedBalance, tokenDecimals);
+        const el = document.getElementById('bridge-amount');
+        el.value = ethers.formatUnits(rawWrappedBalance, tokenDecimals);
+        limitDecimals(el);
     }
 });
 
 // STAKE
 document.getElementById('stake-btn').addEventListener('click', async () => {
-    if (!stakingContract) { alert("Load token data first."); return; }
+    if (!stakingContract) { ui.showAlert("Error", "Load token data first.", true); return; }
     
     const amountVal = document.getElementById("stake-amount").value;
     if(!amountVal || parseFloat(amountVal) <= 0) return;
 
-    loadingModal.show("STAKING", "Check your wallet...");
+    ui.showLoading("STAKING", "Check your wallet...");
 
     try {
+        // Price update removed/commented as per instruction scope focus on dashboard
+        
+        // 2) Actual Stake
         const amount = ethers.parseUnits(amountVal, tokenDecimals);
         
-        loadingModal.update("Approving Token...");
+        ui.updateStep("Approving Token...");
         const txApprove = await wrappedToken.approve(cfg.STAKING_CONTRACT_ADDR, amount);
         await txApprove.wait();
         
-        loadingModal.update("Staking...");
-        const txStake = await stakingContract.stake(amount, { gasLimit: 500000 }); // Safety gas
+        ui.updateStep("Staking...");
+        const txStake = await stakingContract.stake(amount, { gasLimit: 500000 });
         await txStake.wait();
         
-        loadingModal.hide();
-        alert("Stake Successful!");
+        ui.showAlert("Success", "Stake Successful!");
         loadStakingData();
         document.getElementById("stake-amount").value = "";
     } catch(e) {
-        loadingModal.hide();
+        ui.hide();
         console.error(e);
-        alert("Transaction Failed. Check console.");
+        ui.showAlert("Failed", "Transaction Failed. Check console.", true);
     }
 });
 
 // CLAIM
 document.getElementById('claim-btn').addEventListener('click', async () => {
     if (!stakingContract) return;
-    loadingModal.show("CLAIMING", "Confirming...");
+    ui.showLoading("CLAIMING", "Confirming...");
     try {
         const tx = await stakingContract.claimRewards();
         await tx.wait();
-        loadingModal.hide();
-        alert("Rewards Claimed!");
+        ui.showAlert("Success", "Rewards Claimed!");
         loadStakingData();
     } catch(e) { 
-        loadingModal.hide();
-        alert("Claim Failed"); 
+        ui.showAlert("Error", "Claim Failed", true); 
     }
 });
 
 // UNSTAKE
 document.getElementById('unstake-btn').addEventListener('click', async () => {
     if (!stakingContract) return;
-    loadingModal.show("UNSTAKING", "Confirming...");
+    ui.showLoading("UNSTAKING", "Confirming...");
     try {
         const tx = await stakingContract.requestUnstake();
         await tx.wait();
-        loadingModal.hide();
-        alert("Unstaked Successfully!");
+        ui.showAlert("Success", "Unstaked Successfully!");
         loadStakingData();
     } catch(e) { 
-        loadingModal.hide();
-        alert("Unstake Failed"); 
-    }
-});
-
-// UNWRAP
-document.getElementById('unwrap-btn').addEventListener('click', async () => {
-    try {
-        if (!evmSigner || !evmAddress) { alert("Connect MetaMask first."); return; }
-        
-        const solDest = document.getElementById("unwrap-sol-dest").value.trim();
-        const amountStr = document.getElementById("unwrap-amount").value.trim();
-        if (!solDest || !amountStr) { alert("Invalid inputs"); return; }
-
-        loadingModal.show("UNWRAPPING", "Preparing burn...");
-
-        const units = ethers.parseUnits(amountStr, tokenDecimals);
-        const timestamp = Math.floor(Date.now() / 1000);
-        const msg = `UNWRAP:${amountStr}:${solDest}:${timestamp}`;
-        
-        loadingModal.update("Sign the request in MetaMask...");
-        const signature = await evmSigner.signMessage(msg);
-
-        loadingModal.update("Processing on server...");
-        const res = await fetch("/api/unwrap", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ amount: amountStr, solanaAddress: solDest, evmAddress, timestamp, signature }),
-        });
-        
-        const data = await res.json();
-        loadingModal.hide();
-
-        if (data.status === "ok") {
-            alert(`Unwrap Complete! Burn Tx: ${data.evmTxHash.slice(0,10)}...`);
-            document.getElementById("unwrap-amount").value = "";
-            loadStakingData();
-        } else {
-            alert(`Unwrap Failed: ${data.message}`);
-        }
-    } catch (e) { 
-        loadingModal.hide();
-        alert(`Error: ${e.message}`); 
+        ui.showAlert("Error", "Unstake Failed", true); 
     }
 });
